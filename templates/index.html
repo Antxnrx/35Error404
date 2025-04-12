@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ETA Predictor - Bangalore</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(270deg, #fff3e0, #ffe4cc, #fff8e1);
+      background-size: 600% 600%;
+      animation: backgroundMove 15s ease infinite;
+      color: #333;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: row;
+    }
+
+    @keyframes backgroundMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .container {
+      background-color: #fffefb;
+      padding: 25px;
+      border-radius: 0 20px 20px 0;
+      box-shadow: 8px 0 20px rgba(255, 167, 38, 0.2);
+      width: 100%;
+      max-width: 420px;
+      overflow-y: auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 24px;
+      color: #ff6f00;
+    }
+
+    .input-group {
+      margin-bottom: 15px;
+      display: flex;
+      flex-direction: column;
+      
+      
+    }
+
+
+    label {
+      margin-bottom: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      color: #444;
+      padding-top: 10px;
+      padding-bottom: 20px;
+    }
+
+    input, select {
+      padding: 10px;
+      border: 1px solid #ffd180;
+      border-radius: 10px;
+      outline: none;
+      font-size: 15px;
+      background-color: #fffef9;
+      color: #333;
+      transition: box-shadow 0.3s ease, border 0.3s ease;
+    }
+
+    input:focus, select:focus {
+      box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.4);
+      border-color: #ffb74d;
+    }
+
+    button {
+      margin-top: 10px;
+      width: 100%;
+      padding: 12px;
+      background: #ffa000;
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    button:hover {
+      background: #fb8c00;
+      transform: translateY(-1px);
+    }
+
+    #result {
+      margin-top: 20px;
+      padding: 14px;
+      background-color: #fff3e0;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 16px;
+      color: #444;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+
+    .map-container {
+      flex: 1;
+    }
+
+    select#mapMode {
+      margin-top: -10px;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+      }
+      .container {
+        border-radius: 0 0 20px 20px;
+        max-width: none;
+        box-shadow: none;
+      }
+      #map {
+        height: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🕒 ETA Predictor</h1>
+    <form id="etaForm">
+      <div class="input-group">
+        <label>Start Latitude</label>
+        <input type="number" step="any" name="start_lat" required />
+      </div>
+      <div class="input-group">
+        <label>Start Longitude</label>
+        <input type="number" step="any" name="start_lon" required />
+      </div>
+      <div class="input-group">
+        <label>End Latitude</label>
+        <input type="number" step="any" name="end_lat" required />
+      </div>
+      <div class="input-group">
+        <label>End Longitude</label>
+        <input type="number" step="any" name="end_lon" required />
+      </div>
+      <div class="input-group">
+        <label>Day of the Week</label>
+        <select name="day_of_week" required>
+          <option>Monday</option>
+          <option>Tuesday</option>
+          <option>Wednesday</option>
+          <option>Thursday</option>
+          <option>Friday</option>
+          <option>Saturday</option>
+          <option>Sunday</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Hour (0-23)</label>
+        <input type="number" name="hour" min="0" max="23" required />
+      </div>
+      <div class="input-group">
+        <label>Minute (0-59)</label>
+        <input type="number" name="minute" min="0" max="59" required />
+      </div>
+      <button type="submit">Predict ETA</button>
+      <button type="button" id="resetBtn" style="margin-top: 10px; background-color: #ccc; color: #333;">Reset</button>
+    </form>
+
+    <div class="input-group">
+      <label>Click Map to Set:</label>
+      <select id="mapMode">
+        <option value="start">Start Location</option>
+        <option value="end">End Location</option>
+      </select>
+    </div>
+
+    <div id="result" class="hidden"></div>
+  </div>
+
+  <div class="map-container">
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script>
+    const etaForm = document.getElementById("etaForm");
+    const resultDiv = document.getElementById("result");
+    const resetBtn = document.getElementById("resetBtn");
+
+    let markerStart = null;
+    let markerEnd = null;
+
+    etaForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(etaForm);
+      const payload = {};
+      formData.forEach((value, key) => payload[key] = value);
+
+      try {
+        const response = await fetch("/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        resultDiv.classList.remove("hidden");
+
+        if (response.ok) {
+          resultDiv.innerHTML = `🚗 Estimated Duration: <strong>${data.predicted_duration.toFixed(2)} min</strong>`;
+        } else {
+          resultDiv.innerHTML = `<span style="color:red;">Error: ${data.error}</span>`;
+        }
+      } catch (err) {
+        resultDiv.innerHTML = `<span style="color:red;">Error: Could not connect to server.</span>`;
+      }
+    });
+
+    resetBtn.addEventListener("click", () => {
+      etaForm.reset();
+      resultDiv.classList.add("hidden");
+      resultDiv.innerHTML = "";
+
+      if (markerStart) map.removeLayer(markerStart);
+      if (markerEnd) map.removeLayer(markerEnd);
+
+      markerStart = null;
+      markerEnd = null;
+    });
+
+    const map = L.map('map').setView([12.9716, 77.5946], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18
+    }).addTo(map);
+
+    map.on('click', function(e) {
+      const mode = document.getElementById('mapMode').value;
+      const lat = e.latlng.lat.toFixed(6);
+      const lon = e.latlng.lng.toFixed(6);
+
+      if (mode === 'start') {
+        document.querySelector('input[name="start_lat"]').value = lat;
+        document.querySelector('input[name="start_lon"]').value = lon;
+        if (markerStart) map.removeLayer(markerStart);
+        markerStart = L.marker(e.latlng).addTo(map).bindPopup("Start").openPopup();
+      } else {
+        document.querySelector('input[name="end_lat"]').value = lat;
+        document.querySelector('input[name="end_lon"]').value = lon;
+        if (markerEnd) map.removeLayer(markerEnd);
+        markerEnd = L.marker(e.latlng).addTo(map).bindPopup("End").openPopup();
+      }
+    });
+  </script>
+</body>
+</html>
