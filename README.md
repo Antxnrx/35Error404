@@ -31,7 +31,5 @@ The project includes a **Flask backend** and a simple **HTML/CSS/JS frontend**, 
   - `day_of_week`, `hour`, `minute`
   - `distance_km` (Haversine)
 
----
 
-## 📁 Folder Structure
 
